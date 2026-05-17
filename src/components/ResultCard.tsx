@@ -12,6 +12,7 @@ interface ResultCardProps {
   isSelected: boolean;
   onSelect: (url: string) => void;
   status?: "scraped" | "pending" | "processing" | "error";
+  engineUsed?: string;
 }
 
 export function ResultCard({
@@ -22,6 +23,7 @@ export function ResultCard({
   isSelected,
   onSelect,
   status = "pending",
+  engineUsed,
 }: ResultCardProps) {
   return (
     <div
@@ -79,7 +81,15 @@ export function ResultCard({
             status === 'error' ? "bg-red-900/40 text-red-400" :
             isSelected ? "text-purple-300" : "text-zinc-500"
         )}>
-          {status === 'scraped' ? 'Scraped' : status === 'processing' ? 'Processing...' : status === 'error' ? 'Scrape Failed' : isSelected ? 'Ready to Scrap' : 'Reviewing'}
+          {status === "scraped"
+            ? `Saved${engineUsed ? ` · ${engineUsed}` : ""}`
+            : status === "processing"
+              ? "Scraping…"
+              : status === "error"
+                ? `Failed${engineUsed ? ` · ${engineUsed}` : ""}`
+                : isSelected
+                  ? "Selected"
+                  : "Click to select"}
         </span>
         <button
           onClick={(e) => { e.stopPropagation(); onSelect(url); }}

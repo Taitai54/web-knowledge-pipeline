@@ -1,0 +1,17 @@
+# Minimal SearXNG config for Web Knowledge Pipeline (JSON search API)
+# Docs: https://docs.searxng.org/admin/installation-searxng.html
+
+use_default_settings: true
+
+server:
+  secret_key: "hawking-local-dev-change-me-in-production"
+  limiter: false
+  image_proxy: false
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "en"
+  formats:
+    - html
+    - json

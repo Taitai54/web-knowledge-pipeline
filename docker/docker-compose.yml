@@ -1,0 +1,42 @@
+# Local discovery + extraction stack for Web Knowledge Pipeline
+# Usage (from repo root):
+#   docker compose -f docker/docker-compose.yml up -d
+#   docker compose -f docker/docker-compose.yml ps
+
+services:
+  searxng:
+    image: docker.io/searxng/searxng:latest
+    container_name: hawking-searxng
+    restart: unless-stopped
+    ports:
+      - "8888:8080"
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8888/
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+
+  crawl4ai:
+    image: unclecode/crawl4ai:latest
+    container_name: hawking-crawl4ai
+    restart: unless-stopped
+    ports:
+      - "11235:11235"
+    shm_size: "2gb"
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11235/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
