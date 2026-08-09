@@ -1,10 +1,11 @@
 import type { SearchOptions, SearchResult } from "../types";
+import { isBraveConfigured, searchBrave } from "./brave";
 import { isExaConfigured, searchExa } from "./exa";
 import { isFirecrawlSearchConfigured, searchFirecrawl } from "./firecrawl";
 import { checkSearxngHealth, isSearxngConfigured, searchSearxng } from "./searxng";
 import { isTavilyConfigured, searchTavily } from "./tavily";
 
-export type SearchProviderId = "searxng" | "exa" | "firecrawl" | "tavily";
+export type SearchProviderId = "searxng" | "exa" | "firecrawl" | "tavily" | "brave";
 
 export interface SearchProviderInfo {
   id: SearchProviderId;
@@ -23,6 +24,12 @@ export async function listSearchProviders(): Promise<SearchProviderInfo[]> {
       configured: searxngConfigured,
       healthy: searxngConfigured ? await checkSearxngHealth() : false,
       description: "Local Docker — free web search",
+    },
+    {
+      id: "brave",
+      label: "Brave Search",
+      configured: isBraveConfigured(),
+      description: "Independent index — fast and accurate",
     },
     {
       id: "exa",
@@ -55,6 +62,12 @@ export function listSearchProvidersSync(): Omit<SearchProviderInfo, "healthy">[]
       description: "Local Docker — free web search",
     },
     {
+      id: "brave",
+      label: "Brave Search",
+      configured: isBraveConfigured(),
+      description: "Independent index — fast and accurate",
+    },
+    {
       id: "exa",
       label: "Exa",
       configured: isExaConfigured(),
@@ -76,6 +89,7 @@ export function listSearchProvidersSync(): Omit<SearchProviderInfo, "healthy">[]
 }
 
 export function defaultSearchProvider(): SearchProviderId {
+  if (isBraveConfigured()) return "brave";
   if (isSearxngConfigured()) return "searxng";
   if (isExaConfigured()) return "exa";
   if (isTavilyConfigured()) return "tavily";
@@ -91,6 +105,8 @@ export async function runSearch(
   switch (provider) {
     case "searxng":
       return searchSearxng(query, options);
+    case "brave":
+      return searchBrave(query, options);
     case "exa":
       return searchExa(query, options);
     case "firecrawl":

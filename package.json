@@ -6,7 +6,9 @@
     "dev": "next dev -p 3010 --webpack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "search-server": "python pinecone-management/search_server.py",
+    "pinecone-sync": "python pinecone-management/pinecone_bulk.py"
   },
   "dependencies": {
     "@mendable/firecrawl-js": "^4.13.0",

@@ -97,6 +97,7 @@ export function SearchBox({
           <div className="flex flex-wrap bg-zinc-800/50 p-2 m-2 rounded-lg border border-zinc-700 items-center gap-2 md:gap-4">
             <div className="flex items-center flex-wrap gap-1">
               {providerButton("searxng", "SearXNG", "bg-emerald-600 text-white")}
+              {providerButton("brave", "Brave", "bg-orange-600 text-white")}
               {providerButton("exa", "Exa", "bg-cyan-600 text-white")}
               {providerButton("tavily", "Tavily", "bg-blue-600 text-white")}
               {providerButton("firecrawl", "Firecrawl", "bg-purple-600 text-white")}

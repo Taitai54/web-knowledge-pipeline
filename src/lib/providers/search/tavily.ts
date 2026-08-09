@@ -25,6 +25,7 @@ export async function searchTavily(
     searchDepth: "advanced",
     includeImages: false,
     includeAnswer: false,
+    includePublishedDate: true,
     maxResults: limit,
     days,
   });

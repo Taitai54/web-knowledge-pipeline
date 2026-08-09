@@ -1,0 +1,18 @@
+# Dependencies for search_server.py — install with:
+#   pip install -r requirements.txt -r requirements-search.txt
+#
+# Previously undeclared: search_server.py imports flask and the official
+# Pinecone Python client but neither was listed in any requirements file.
+flask>=3.0
+
+# Pinecone renamed their PyPI package from `pinecone-client` to `pinecone`
+# (both expose `from pinecone import Pinecone`). Neither is installed in
+# this environment, so this is pinned to the current, actively-maintained
+# name as of early 2026 — verify with `pip show pinecone` / `pip show
+# pinecone-client` in whatever environment actually runs this server, and
+# adjust if it turns out to be on the legacy package.
+pinecone>=5.0
+
+# Local query embedding — same optional dependency as --client-embed in
+# pinecone_bulk.py (~2 GB download on first run).
+sentence-transformers>=3.0

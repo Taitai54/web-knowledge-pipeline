@@ -1,7 +1,7 @@
 
 "use client";
 
-import { Check, ExternalLink } from "lucide-react";
+import { Check, ExternalLink, Calendar } from "lucide-react";
 import clsx from "clsx";
 
 interface ResultCardProps {
@@ -13,6 +13,7 @@ interface ResultCardProps {
   onSelect: (url: string) => void;
   status?: "scraped" | "pending" | "processing" | "error";
   engineUsed?: string;
+  score: number;
 }
 
 export function ResultCard({
@@ -24,7 +25,11 @@ export function ResultCard({
   onSelect,
   status = "pending",
   engineUsed,
+  score,
 }: ResultCardProps) {
+  const percentage = Math.round(Math.min(1.0, score) * 100);
+  const parsedDate = date ? new Date(date) : null;
+  const isValidDate = parsedDate && !isNaN(parsedDate.getTime());
   return (
     <div
       className={clsx(
@@ -52,21 +57,55 @@ export function ResultCard({
         <h3 className="text-xl font-semibold text-white line-clamp-2 leading-snug">
           {title}
         </h3>
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-zinc-500 hover:text-purple-400 truncate flex items-center gap-1 w-fit transition-colors"
-        >
-          {new URL(url).hostname}
-          <ExternalLink className="w-3 h-3" />
-        </a>
+        <div className="flex flex-wrap items-center gap-3">
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-zinc-500 hover:text-purple-400 truncate flex items-center gap-1 w-fit transition-colors"
+          >
+            {new URL(url).hostname}
+            <ExternalLink className="w-3 h-3" />
+          </a>
+          
+          {date && isValidDate && parsedDate && (
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-zinc-800/80 text-zinc-400 rounded text-[10px] font-medium border border-zinc-700/50">
+              <Calendar className="w-3.5 h-3.5 text-zinc-500" />
+              {parsedDate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+            </span>
+          )}
+        </div>
         
-        {date && (
-          <span className="inline-block px-2 py-0.5 mt-2 bg-zinc-800/80 text-zinc-400 rounded text-xs font-medium border border-zinc-700/50">
-            {new Date(date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
-          </span>
-        )}
+        {/* Influence Rating & Gauge */}
+        <div className="pt-2 pb-1 space-y-2 max-w-sm">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-zinc-500 font-medium">Article Influence</span>
+            <span className={clsx(
+              "px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wide uppercase border",
+              score >= 0.85 ? "bg-purple-950/40 text-purple-400 border-purple-800/30" :
+              score >= 0.7 ? "bg-blue-950/40 text-blue-400 border-blue-900/30" :
+              score >= 0.5 ? "bg-zinc-800 text-zinc-300 border-zinc-700" :
+              "bg-zinc-950 text-zinc-500 border-zinc-900"
+            )}>
+              {score >= 0.85 ? "Very High" :
+               score >= 0.7 ? "High" :
+               score >= 0.5 ? "Medium" :
+               "Low"}
+            </span>
+          </div>
+          <div className="w-full h-1.5 bg-zinc-950 rounded-full overflow-hidden border border-zinc-800/50">
+            <div 
+              className={clsx(
+                "h-full rounded-full transition-all duration-500",
+                score >= 0.85 ? "bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.5)]" :
+                score >= 0.7 ? "bg-blue-500" :
+                score >= 0.5 ? "bg-zinc-500" :
+                "bg-zinc-650"
+              )}
+              style={{ width: `${percentage}%` }}
+            />
+          </div>
+        </div>
         
         <p className="text-base text-zinc-300 line-clamp-4 leading-relaxed">
           {snippet}

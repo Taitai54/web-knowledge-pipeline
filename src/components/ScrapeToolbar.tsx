@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Download, FolderOpen, Loader2, RefreshCw } from "lucide-react";
+import { Download, FolderOpen, Loader2, RefreshCw, Database, Trash2, Terminal } from "lucide-react";
 import type { ProviderStatus } from "@/components/ProviderStatusBar";
 
 interface ScrapeToolbarProps {
@@ -24,6 +24,10 @@ interface ScrapeToolbarProps {
   onSelectFailed: () => void;
   onScrape: () => void;
   onRetryFailed: () => void;
+  onSync: () => void;
+  isSyncing: boolean;
+  syncLogs: string[];
+  onClearLogs: () => void;
 }
 
 function engineLabel(id: string, providers: ProviderStatus[]) {
@@ -54,6 +58,10 @@ export function ScrapeToolbar({
   onSelectFailed,
   onScrape,
   onRetryFailed,
+  onSync,
+  isSyncing,
+  syncLogs,
+  onClearLogs,
 }: ScrapeToolbarProps) {
   const configuredEngines = scrapeProviders.filter((p) => p.configured);
   const canRetry = failedCount > 0 && !isScraping;
@@ -173,7 +181,56 @@ export function ScrapeToolbar({
             </>
           )}
         </button>
+
+        <button
+          type="button"
+          onClick={onSync}
+          disabled={isSyncing || !category}
+          className={clsx(
+            "px-6 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 font-semibold rounded-lg flex items-center justify-center gap-2 transition-all",
+            (isSyncing || !category) && "opacity-50 cursor-not-allowed",
+          )}
+        >
+          {isSyncing ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+              Syncing…
+            </>
+          ) : (
+            <>
+              <Database className="w-4 h-4 text-purple-400" />
+              Sync folder to Pinecone
+            </>
+          )}
+        </button>
       </div>
+
+      {syncLogs.length > 0 && (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+              <Terminal className="w-3.5 h-3.5 text-purple-400" />
+              <span>Pinecone Sync Console</span>
+            </div>
+            <button
+              type="button"
+              onClick={onClearLogs}
+              className="p-1 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 rounded transition-colors"
+              title="Clear Console"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          
+          <div className="font-mono text-[10px] text-zinc-400 p-3 bg-zinc-900/50 rounded-lg max-h-36 overflow-y-auto space-y-1 scrollbar-thin">
+            {syncLogs.map((log: string, i: number) => (
+              <div key={i} className="whitespace-pre-wrap leading-relaxed truncate-3-lines">
+                {log}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {failedCount > 0 && (
         <div className="rounded-xl border border-amber-800/40 bg-amber-950/20 p-4 space-y-3">

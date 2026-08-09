@@ -8,7 +8,10 @@ import { PasteUrlsPanel } from "@/components/PasteUrlsPanel";
 import { ProviderStatusBar, type ProviderStatus } from "@/components/ProviderStatusBar";
 import { PipelineGuide, type PipelineStep } from "@/components/PipelineGuide";
 import { ScrapeToolbar } from "@/components/ScrapeToolbar";
+import { RagPlayground } from "@/components/RagPlayground";
+import { Globe, MessageSquare } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
+import clsx from "clsx";
 
 interface SearchResult {
   title: string;
@@ -42,6 +45,9 @@ export default function Home() {
   const [resolvedPath, setResolvedPath] = useState<string>("");
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [showProviderHealth, setShowProviderHealth] = useState(false);
+  const [activeWorkspace, setActiveWorkspace] = useState<"scrape" | "playground">("scrape");
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncLogs, setSyncLogs] = useState<string[]>([]);
 
   useEffect(() => {
     const loadProviders = async () => {
@@ -236,6 +242,68 @@ export default function Home() {
     }
   };
 
+  const handleSync = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    setSyncLogs(["Initiating sync connection..."]);
+
+    try {
+      const res = await fetch("/api/pinecone/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Sync failed to start");
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) {
+        throw new Error("No readable stream in response");
+      }
+
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.trim()) {
+            try {
+              const packet = JSON.parse(line);
+              if (packet.type === "stdout" || packet.type === "stderr" || packet.type === "status" || packet.type === "error") {
+                setSyncLogs((prev) => [...prev, packet.message]);
+              } else if (packet.type === "close") {
+                setSyncLogs((prev) => [...prev, `Sync finished with exit code ${packet.code}`]);
+                if (packet.code === 0) {
+                  toast.success("Folder successfully synced to Pinecone!");
+                } else {
+                  toast.error(`Sync finished with error code ${packet.code}`);
+                }
+              }
+            } catch (err) {
+              console.error("Error parsing sync packet:", err, line);
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error("Sync failed:", err);
+      setSyncLogs((prev) => [...prev, `Sync failed: ${err.message}`]);
+      toast.error(err.message || "Sync failed");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-background relative overflow-hidden">
       <FolderPickerModal
@@ -270,113 +338,154 @@ export default function Home() {
           </p>
         </div>
 
-        <PipelineGuide
-          activeStep={activeStep}
-          hasResults={results.length > 0}
-          selectedCount={selectedUrls.size}
-          failedCount={failedCount}
-        />
-
-        <div className="space-y-4">
-          <div className="flex justify-end">
+        {/* Workspace Mode Selection Tabs */}
+        <div className="flex justify-center border-b border-zinc-800 pb-2">
+          <div className="flex bg-zinc-900/60 p-1.5 rounded-xl border border-zinc-800/80">
             <button
-              type="button"
-              onClick={() => setShowProviderHealth((v) => !v)}
-              className="text-xs text-zinc-500 hover:text-zinc-300 underline-offset-2 hover:underline"
+              onClick={() => setActiveWorkspace("scrape")}
+              className={clsx(
+                "flex items-center gap-2.5 px-6 py-2.5 rounded-lg text-sm font-semibold transition-all duration-300",
+                activeWorkspace === "scrape"
+                  ? "bg-purple-600 text-white shadow-lg shadow-purple-500/10"
+                  : "text-zinc-400 hover:text-zinc-200"
+              )}
             >
-              {showProviderHealth ? "Hide" : "Show"} provider health
+              <Globe className="w-4 h-4" />
+              Scrape & Index Workspace
             </button>
-          </div>
-          {showProviderHealth && searchProviders.length > 0 && (
-            <ProviderStatusBar
-              search={searchProviders}
-              scrape={scrapeProviders}
-              defaults={providerDefaults}
-            />
-          )}
-
-          <SearchBox
-            onSearch={handleSearch}
-            isLoading={isSearching}
-            provider={provider}
-            setProvider={setProvider}
-            searchProviders={searchProviders}
-          />
-
-          <div className="flex justify-center">
-            <PasteUrlsPanel
-              onAdd={(items) => {
-                setResults((prev) => {
-                  const existing = new Set(prev.map((r) => r.url));
-                  const added = items
-                    .filter((i) => !existing.has(i.url))
-                    .map((i) => ({
-                      title: i.title,
-                      url: i.url,
-                      content: i.content,
-                      score: 0,
-                    }));
-                  return [...prev, ...added];
-                });
-                toast.success(`Added ${items.length} URL(s) — now select them in step 2`);
-              }}
-            />
+            <button
+              onClick={() => setActiveWorkspace("playground")}
+              className={clsx(
+                "flex items-center gap-2.5 px-6 py-2.5 rounded-lg text-sm font-semibold transition-all duration-300",
+                activeWorkspace === "playground"
+                  ? "bg-purple-600 text-white shadow-lg shadow-purple-500/10"
+                  : "text-zinc-400 hover:text-zinc-200"
+              )}
+            >
+              <MessageSquare className="w-4 h-4" />
+              RAG Chat Playground
+            </button>
           </div>
         </div>
 
-        {results.length > 0 && (
+        {activeWorkspace === "scrape" ? (
           <>
-            <div className="px-1">
-              <p className="text-xs font-semibold uppercase tracking-wider text-purple-400">Step 2</p>
-              <h2 className="text-lg font-semibold text-zinc-100">Select pages to save</h2>
-              <p className="text-sm text-zinc-500 mt-1">
-                Click cards to toggle selection — you can select as many as you want.
-              </p>
-            </div>
-
-            <ScrapeToolbar
-              category={category}
-              onCategoryChange={setCategory}
-              resolvedPath={resolvedPath}
-              onProjectDefault={() => setCategory("general")}
-              onBrowseFolder={() => setIsPickerOpen(true)}
+            <PipelineGuide
+              activeStep={activeStep}
+              hasResults={results.length > 0}
               selectedCount={selectedUrls.size}
-              totalCount={results.length}
               failedCount={failedCount}
-              scrapedCount={scrapedCount}
-              scrapeEngine={scrapeEngine}
-              onScrapeEngineChange={setScrapeEngine}
-              retryEngine={retryEngine}
-              onRetryEngineChange={setRetryEngine}
-              scrapeProviders={scrapeProviders}
-              isScraping={isScraping}
-              onSelectAll={handleSelectAll}
-              onSelectFailed={handleSelectFailed}
-              onScrape={handleScrape}
-              onRetryFailed={handleRetryFailed}
             />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {results.map((result, index) => (
-                <div
-                  key={`${result.url}-${index}`}
-                  onClick={() => toggleSelection(result.url)}
-                  className="cursor-pointer"
+            <div className="space-y-4">
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowProviderHealth((v) => !v)}
+                  className="text-xs text-zinc-500 hover:text-zinc-300 underline-offset-2 hover:underline"
                 >
-                  <ResultCard
-                    title={result.title}
-                    url={result.url}
-                    snippet={result.content}
-                    date={result.date}
-                    isSelected={selectedUrls.has(result.url)}
-                    onSelect={() => toggleSelection(result.url)}
-                    status={scrapeStatus[result.url]}
-                    engineUsed={scrapeEngineByUrl[result.url]}
-                  />
-                </div>
-              ))}
+                  {showProviderHealth ? "Hide" : "Show"} provider health
+                </button>
+              </div>
+              {showProviderHealth && searchProviders.length > 0 && (
+                <ProviderStatusBar
+                  search={searchProviders}
+                  scrape={scrapeProviders}
+                  defaults={providerDefaults}
+                />
+              )}
+
+              <SearchBox
+                onSearch={handleSearch}
+                isLoading={isSearching}
+                provider={provider}
+                setProvider={setProvider}
+                searchProviders={searchProviders}
+              />
+
+              <div className="flex justify-center">
+                <PasteUrlsPanel
+                  onAdd={(items) => {
+                    setResults((prev) => {
+                      const existing = new Set(prev.map((r) => r.url));
+                      const added = items
+                        .filter((i) => !existing.has(i.url))
+                        .map((i) => ({
+                          title: i.title,
+                          url: i.url,
+                          content: i.content,
+                          score: 0,
+                        }));
+                      return [...prev, ...added];
+                    });
+                    toast.success(`Added ${items.length} URL(s) — now select them in step 2`);
+                  }}
+                />
+              </div>
             </div>
+
+            {results.length > 0 && (
+              <>
+                <div className="px-1">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-purple-400">Step 2</p>
+                  <h2 className="text-lg font-semibold text-zinc-100">Select pages to save</h2>
+                  <p className="text-sm text-zinc-500 mt-1">
+                    Click cards to toggle selection — you can select as many as you want.
+                  </p>
+                </div>
+
+                <ScrapeToolbar
+                  category={category}
+                  onCategoryChange={setCategory}
+                  resolvedPath={resolvedPath}
+                  onProjectDefault={() => setCategory("general")}
+                  onBrowseFolder={() => setIsPickerOpen(true)}
+                  selectedCount={selectedUrls.size}
+                  totalCount={results.length}
+                  failedCount={failedCount}
+                  scrapedCount={scrapedCount}
+                  scrapeEngine={scrapeEngine}
+                  onScrapeEngineChange={setScrapeEngine}
+                  retryEngine={retryEngine}
+                  onRetryEngineChange={setRetryEngine}
+                  scrapeProviders={scrapeProviders}
+                  isScraping={isScraping}
+                  onSelectAll={handleSelectAll}
+                  onSelectFailed={handleSelectFailed}
+                  onScrape={handleScrape}
+                  onRetryFailed={handleRetryFailed}
+                  onSync={handleSync}
+                  isSyncing={isSyncing}
+                  syncLogs={syncLogs}
+                  onClearLogs={() => setSyncLogs([])}
+                />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {results.map((result, index) => (
+                    <div
+                      key={`${result.url}-${index}`}
+                      onClick={() => toggleSelection(result.url)}
+                      className="cursor-pointer"
+                    >
+                      <ResultCard
+                        title={result.title}
+                        url={result.url}
+                        snippet={result.content}
+                        date={result.date}
+                        isSelected={selectedUrls.has(result.url)}
+                        onSelect={() => toggleSelection(result.url)}
+                        status={scrapeStatus[result.url]}
+                        engineUsed={scrapeEngineByUrl[result.url]}
+                        score={result.score}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </>
+        ) : (
+          <RagPlayground defaultNamespace={category} />
         )}
       </div>
     </main>

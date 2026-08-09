@@ -1,0 +1,9 @@
+@echo off
+set PINECONE_API_KEY=your-pinecone-api-key-here
+set PINECONE_INDEX=peace
+echo Starting local search server on http://localhost:8765
+echo First search will take 1-2 minutes to load the embedding model.
+echo Keep this window open while using the app.
+echo.
+python search_server.py
+pause
