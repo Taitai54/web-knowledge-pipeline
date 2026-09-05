@@ -12,6 +12,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "URL is required" }, { status: 400 });
     }
 
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      return NextResponse.json({ success: false, error: "URL is not valid" }, { status: 400 });
+    }
+    if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+      return NextResponse.json({ success: false, error: "Only http(s) URLs are allowed" }, { status: 400 });
+    }
+
     const scrapeEngine = engine || defaultScrapeProvider();
     const { markdown: markdownContent } = await runScrape(scrapeEngine, url);
 

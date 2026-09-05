@@ -1,2 +1,0 @@
-# GUI extras — only needed if you run pinecone_gui.py / pinecone_gui.bat
-customtkinter>=5.2

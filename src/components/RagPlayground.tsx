@@ -13,6 +13,12 @@ interface Chunk {
   text: string;
   docType?: string;
   section?: string;
+  namespace?: string;
+}
+
+interface NamespaceInfo {
+  name: string;
+  vectorCount: number;
 }
 
 interface Message {
@@ -32,9 +38,12 @@ export function RagPlayground({ defaultNamespace }: RagPlaygroundProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [namespace, setNamespace] = useState(defaultNamespace || "general");
+  const [searchAll, setSearchAll] = useState(false);
+  const [availableNamespaces, setAvailableNamespaces] = useState<NamespaceInfo[]>([]);
+  const [namespacesError, setNamespacesError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
-  
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -42,6 +51,28 @@ export function RagPlayground({ defaultNamespace }: RagPlaygroundProps) {
       setNamespace(defaultNamespace);
     }
   }, [defaultNamespace]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/pinecone/namespaces");
+        const data = await res.json();
+        if (cancelled) return;
+        if (data.success) {
+          setAvailableNamespaces(data.namespaces || []);
+          setNamespacesError("");
+        } else {
+          setNamespacesError(data.error || "Failed to load namespaces");
+        }
+      } catch (err) {
+        if (!cancelled) setNamespacesError("Could not reach the search server to list namespaces.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -71,7 +102,7 @@ export function RagPlayground({ defaultNamespace }: RagPlaygroundProps) {
       const res = await fetch("/api/rag/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: userQuery, namespace }),
+        body: JSON.stringify({ query: userQuery, namespace, searchAll }),
       });
 
       const data = await res.json();
@@ -184,15 +215,48 @@ export function RagPlayground({ defaultNamespace }: RagPlaygroundProps) {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-zinc-400">Namespace:</span>
-            <input
-              type="text"
-              value={namespace}
-              onChange={(e) => setNamespace(e.target.value)}
-              className="bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs rounded-md px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono w-28 md:w-36"
-              placeholder="Namespace"
-            />
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={searchAll}
+                onChange={(e) => setSearchAll(e.target.checked)}
+                className="accent-purple-500"
+              />
+              Search all namespaces
+            </label>
+
+            {!searchAll && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-400">Namespace:</span>
+                {availableNamespaces.length > 0 ? (
+                  <select
+                    value={namespace}
+                    onChange={(e) => setNamespace(e.target.value)}
+                    className="bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono max-w-[9rem]"
+                    title={namespacesError || undefined}
+                  >
+                    {!availableNamespaces.some((n) => n.name === namespace) && (
+                      <option value={namespace}>{namespace}</option>
+                    )}
+                    {availableNamespaces.map((n) => (
+                      <option key={n.name} value={n.name}>
+                        {n.name} ({n.vectorCount.toLocaleString()})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={namespace}
+                    onChange={(e) => setNamespace(e.target.value)}
+                    className="bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs rounded-md px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono w-28 md:w-36"
+                    placeholder="Namespace"
+                    title={namespacesError || undefined}
+                  />
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -206,7 +270,11 @@ export function RagPlayground({ defaultNamespace }: RagPlaygroundProps) {
               <div className="space-y-1.5 max-w-sm">
                 <h4 className="text-sm font-medium text-zinc-200">Start a conversation</h4>
                 <p className="text-xs text-zinc-500">
-                  Ask a question about documents saved under the <span className="font-mono text-zinc-400">"{namespace}"</span> namespace in your Pinecone index.
+                  {searchAll ? (
+                    <>Ask a question across <span className="font-mono text-zinc-400">every namespace</span> in your Pinecone index.</>
+                  ) : (
+                    <>Ask a question about documents saved under the <span className="font-mono text-zinc-400">"{namespace}"</span> namespace in your Pinecone index.</>
+                  )}
                 </p>
               </div>
               
@@ -354,9 +422,16 @@ export function RagPlayground({ defaultNamespace }: RagPlaygroundProps) {
                       </h4>
                     </div>
 
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-950/40 text-emerald-400 border border-emerald-900/40 font-mono">
-                      {(chunk.score * 100).toFixed(0)}% Match
-                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {searchAll && chunk.namespace && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700 font-mono">
+                          {chunk.namespace}
+                        </span>
+                      )}
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-950/40 text-emerald-400 border border-emerald-900/40 font-mono">
+                        {(chunk.score * 100).toFixed(0)}% Match
+                      </span>
+                    </div>
                   </div>
 
                   <p className="text-xs text-zinc-400 font-mono break-all line-clamp-1" title={chunk.source}>

@@ -2,29 +2,31 @@ import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
   try {
-    const { query, namespace } = await request.json();
+    const { query, namespace, searchAll } = await request.json();
 
     if (!query) {
       return NextResponse.json({ success: false, error: "Query is required" }, { status: 400 });
     }
-    if (!namespace) {
-      return NextResponse.json({ success: false, error: "Namespace is required" }, { status: 400 });
+    if (!searchAll && !namespace) {
+      return NextResponse.json({ success: false, error: "Namespace is required unless searchAll is set" }, { status: 400 });
     }
 
     // 1. Query the Flask search server
     let chunks: any[] = [];
+    let searchedNamespaces: string[] = [];
     let searchError = "";
     try {
       const searchRes = await fetch("http://localhost:8765/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, namespace, topK: 5 }),
-        signal: AbortSignal.timeout(10000), // 10 second timeout
+        body: JSON.stringify({ query, namespace, searchAll: !!searchAll, topK: 5 }),
+        signal: AbortSignal.timeout(searchAll ? 25000 : 10000),
       });
 
       if (searchRes.ok) {
         const searchData = await searchRes.json();
         chunks = searchData.chunks || [];
+        searchedNamespaces = searchData.searchedNamespaces || [];
       } else {
         const errorText = await searchRes.text();
         searchError = `Search server returned HTTP ${searchRes.status}: ${errorText.slice(0, 100)}`;
@@ -43,12 +45,48 @@ export async function POST(request: Request) {
     }
 
     if (chunks.length === 0) {
+      const scope = searchAll
+        ? `across all ${searchedNamespaces.length} namespace(s)`
+        : `in "${namespace}"`;
       return NextResponse.json({
         success: true,
-        answer: "No relevant content found in the selected namespace. Make sure you have synced files to it.",
-        chunks: []
+        answer: `No relevant content found ${scope}. Make sure you have synced files to it.`,
+        chunks: [],
+        searchedNamespaces
       });
     }
+
+    // 1b. Chunks from /search are fixed-size slices and often cut off mid-sentence
+    // at their boundary. Expand each one to its immediate neighbors via the
+    // existing /context endpoint (zero-vector metadata-filtered query, no extra
+    // embedding cost) so both the LLM and the source panel see the fuller passage.
+    await Promise.all(
+      chunks.map(async (c: any) => {
+        if (!c.source || c.chunkIndex === undefined || c.chunkIndex === null) return;
+        try {
+          const ctxRes = await fetch("http://localhost:8765/context", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              source: c.source,
+              chunkIndex: c.chunkIndex,
+              namespace: c.namespace || namespace,
+              window: 2,
+            }),
+            signal: AbortSignal.timeout(10000),
+          });
+          if (ctxRes.ok) {
+            const ctxData = await ctxRes.json();
+            if (ctxData.combinedText) {
+              c.text = ctxData.combinedText;
+              c.expanded = true;
+            }
+          }
+        } catch {
+          // Best-effort — fall back to the original single-chunk text.
+        }
+      })
+    );
 
     // 2. Check for LLM keys
     const geminiKey = process.env.GEMINI_API_KEY;
@@ -143,7 +181,8 @@ ${contextText}`;
       success: true,
       answer,
       chunks,
-      provider: providerUsed
+      provider: providerUsed,
+      searchedNamespaces
     });
 
   } catch (error: any) {

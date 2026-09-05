@@ -43,6 +43,7 @@ export default function Home() {
   const [scrapeStatus, setScrapeStatus] = useState<Record<string, ScrapeStatus>>({});
   const [scrapeEngineByUrl, setScrapeEngineByUrl] = useState<Record<string, string>>({});
   const [resolvedPath, setResolvedPath] = useState<string>("");
+  const [resolvedNamespace, setResolvedNamespace] = useState<string>("");
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [showProviderHealth, setShowProviderHealth] = useState(false);
   const [activeWorkspace, setActiveWorkspace] = useState<"scrape" | "playground">("scrape");
@@ -82,14 +83,17 @@ export default function Home() {
     const fetchPath = async () => {
       if (!category) {
         setResolvedPath("");
+        setResolvedNamespace("");
         return;
       }
       try {
         const res = await fetch(`/api/resolve-path?path=${encodeURIComponent(category)}`);
         const data = await res.json();
         setResolvedPath(data.saveDir);
+        setResolvedNamespace(data.frontmatterCategory || "");
       } catch {
         setResolvedPath("");
+        setResolvedNamespace("");
       }
     };
     const timeoutId = setTimeout(fetchPath, 300);
@@ -485,7 +489,7 @@ export default function Home() {
             )}
           </>
         ) : (
-          <RagPlayground defaultNamespace={category} />
+          <RagPlayground defaultNamespace={resolvedNamespace || category} />
         )}
       </div>
     </main>

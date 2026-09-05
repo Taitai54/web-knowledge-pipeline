@@ -7,8 +7,11 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const reqPath = searchParams.get('path');
+    if (reqPath && reqPath.includes('\0')) {
+      return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+    }
     const currentPath = reqPath || os.homedir();
-    
+
     const isWindows = os.platform() === 'win32';
 
     if (isWindows && currentPath === 'root') {
