@@ -11,7 +11,10 @@ export function resolveSavePath(
   category: string | undefined,
   title: string,
 ): ResolveSavePathResult {
-  const inputCategory = category || "general";
+  const inputCategory = (category || "general").trim();
+  if (inputCategory.includes("\0")) {
+    throw new Error("Invalid category: contains a null byte");
+  }
   const isCustomPath =
     path.isAbsolute(inputCategory) ||
     inputCategory.includes("/") ||

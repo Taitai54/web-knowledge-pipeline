@@ -1,7 +1,0 @@
-{
-    "index_name": "your-index-name",
-    "namespace": "",
-    "doc_type": "auto-detect",
-    "tags": "",
-    "client_embed": true
-}

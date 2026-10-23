@@ -44,7 +44,7 @@ export async function searchSearxng(
   });
 
   if (options.timeRange && options.timeRange !== "any" && options.timeRange !== "all") {
-    const range = options.timeRange === "day" ? "day" : options.timeRange === "week" ? "day" : options.timeRange === "month" ? "month" : options.timeRange === "year" ? "year" : undefined;
+    const range = options.timeRange === "day" ? "day" : options.timeRange === "week" ? "week" : options.timeRange === "month" ? "month" : options.timeRange === "year" ? "year" : undefined;
     if (range) params.set("time_range", range);
   }
 

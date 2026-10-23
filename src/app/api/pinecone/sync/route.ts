@@ -11,14 +11,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Category is required" }, { status: 400 });
     }
 
+    // Must start with an alphanumeric char so a value like "-force" can never
+    // be mistaken for a CLI flag by pinecone_bulk.py's argparse.
+    const safeIdentifier = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/;
+    if (!safeIdentifier.test(indexName)) {
+      return NextResponse.json({ success: false, error: "Invalid indexName" }, { status: 400 });
+    }
+    if (namespace && !safeIdentifier.test(namespace)) {
+      return NextResponse.json({ success: false, error: "Invalid namespace" }, { status: 400 });
+    }
+
     const { saveDir, frontmatterCategory } = resolveSavePath(category, "dummy");
     const targetNamespace = namespace || frontmatterCategory;
+    if (!safeIdentifier.test(targetNamespace)) {
+      return NextResponse.json({ success: false, error: "Invalid resolved namespace" }, { status: 400 });
+    }
 
     const encoder = new TextEncoder();
     const customStream = new ReadableStream({
       start(controller) {
-        const pythonPath = "python";
-        const scriptPath = path.resolve(process.cwd(), "pinecone-management", "pinecone_bulk.py");
+        const pythonPath = path.resolve(process.cwd(), "..", "pinecone-management", ".venv", "bin", "python3");
+        const scriptPath = path.resolve(process.cwd(), "..", "pinecone-management", "pinecone_bulk.py");
 
         const args = [
           scriptPath,
