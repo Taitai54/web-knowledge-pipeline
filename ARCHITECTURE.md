@@ -23,7 +23,7 @@ Brave
               Pinecone index peace, namespace = slugified category
                                │
                                ▼
-              RAG Chat  →  search_server.py :8765  →  Gemini or OpenAI
+              RAG Chat  →  wkp_search_server.py :8765  →  Gemini or OpenAI
 ```
 
 The category field in the UI is both the folder name and the Pinecone namespace. `general` becomes `content/knowledge-base/general/` and namespace `general`. A custom absolute path uses the folder's basename as the namespace.
@@ -42,9 +42,9 @@ The category field in the UI is both the folder name and the Pinecone namespace.
 | Sync route | `src/app/api/pinecone/sync/route.ts` | Spawns `pinecone_bulk.py --namespace <category> --prune-by-source` |
 | Chat route | `src/app/api/rag/chat/route.ts` | Calls the search server, then an LLM |
 | Chat UI | `src/components/RagPlayground.tsx` | Namespace box, answer, citation panel |
-| Search server | `pinecone-management/search_server.py`, port **8765** | Local query embedding + Pinecone `/query` |
-| Uploader | `pinecone-management/pinecone_bulk.py` | Chunk, embed, upsert. See `pinecone-management/CLAUDE.md` |
-| Claude search | `pinecone-management/pinecone_mcp.py` | Same index, used by Claude, not by the web chat |
+| Search server | `../pinecone-management/wkp_search_server.py`, port **8765** | Local query embedding + Pinecone `/query` |
+| Uploader | `../pinecone-management/pinecone_bulk.py` | Chunk, embed, upsert. See `../pinecone-management/CLAUDE.md` |
+| Claude search | `../pinecone-management/pinecone_mcp.py` | Same index, used by Claude, not by the web chat |
 | Local search/scrape | `docker/docker-compose.yml` | SearXNG `:8888`, Crawl4AI `:11235` |
 
 `scripts/ingest.mjs` is a mock. It prints chunk counts and does not write to Pinecone. The real ingest path is **Sync to Pinecone** in the scrape workspace, or `pinecone_bulk.py` directly.
@@ -54,7 +54,7 @@ The category field in the UI is both the folder name and the Pinecone namespace.
 `POST /api/rag/chat` with `{ query, index, namespaces, history }` (a single `namespace` still works):
 
 1. `POST http://localhost:8765/search` with `{ query, index, namespaces, topK: 5, rerank: true }`. The request waits up to 90 seconds.
-2. `search_server.py` looks the index up in the Pinecone control plane (API version 2026-07, cached 60 seconds) and picks the query model from its schema:
+2. `wkp_search_server.py` looks the index up in the Pinecone control plane (API version 2026-07, cached 60 seconds) and picks the query model from its schema:
 
    | Index kind | Query model | Read endpoint |
    |------------|-------------|---------------|
@@ -82,7 +82,7 @@ As of the last index read, `peace` held about 148k vectors across 25 namespaces 
 
 ## Two query stacks
 
-The web chat uses `search_server.py`: dense cosine search, top 5, full chunk text, no rerank.
+The web chat uses `wkp_search_server.py`: dense cosine search, top 5, full chunk text, no rerank.
 
 Claude uses `pinecone_mcp.py`: local embeddings, a larger candidate pool, local cross-encoder rerank, truncation, and an in-memory cache. That server is not on the HTTP path the playground calls.
 

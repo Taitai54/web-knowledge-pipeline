@@ -158,7 +158,13 @@ if not errorlevel 1 (
     exit /b 0
 )
 echo Starting RAG search server. Chat stays disabled until the model finishes loading.
-start "WKP Search Server" /D "%~dp0." cmd /k "set PYTHONUNBUFFERED=1&& python pinecone-management\search_server.py"
+set "WKP_SEARCH_DIR=%~dp0..\pinecone-management"
+set "WKP_SEARCH_SCRIPT=wkp_search_server.py"
+if not exist "%WKP_SEARCH_DIR%\%WKP_SEARCH_SCRIPT%" (
+    set "WKP_SEARCH_DIR=%~dp0pinecone-management"
+    set "WKP_SEARCH_SCRIPT=search_server.py"
+)
+start "WKP Search Server" /D "%WKP_SEARCH_DIR%" cmd /k "set PYTHONUNBUFFERED=1&& python %WKP_SEARCH_SCRIPT%"
 echo.
 exit /b 0
 

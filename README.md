@@ -2,7 +2,7 @@
 
 Search the web, save pages as Markdown, upload them to Pinecone, and ask questions against that namespace.
 
-The running shape of the system is in [ARCHITECTURE.md](ARCHITECTURE.md). Provider setup for local Docker is in [docker/README.md](docker/README.md). The uploader, MCP server, and embedding rules are in [pinecone-management/README.md](pinecone-management/README.md).
+The running shape of the system is in [ARCHITECTURE.md](ARCHITECTURE.md). Provider setup for local Docker is in [docker/README.md](docker/README.md). The uploader, MCP server, and embedding rules are in `pinecone-management/README.md` in the sibling `pinecone-management` repo (clone it next to this folder: `GitHub/pinecone-management`).
 
 ## What you can do
 
@@ -31,7 +31,7 @@ Python side (upload + chat retrieval):
 
 ```bash
 pip install requests pypdf pyyaml
-pip install -r pinecone-management/requirements.txt -r pinecone-management/requirements-search.txt
+pip install -r ../pinecone-management/requirements.txt -r ../pinecone-management/requirements-search.txt
 pip install sentence-transformers
 ```
 
@@ -47,7 +47,7 @@ Or `npm run dev`. The app is at [http://localhost:3010](http://localhost:3010).
 
 ### RAG chat
 
-`run-web-knowledge-pipeline.bat` starts the web app, the Pinecone search server, and Docker when Docker is available. Chat stays disabled until the search window prints `Ready for chat` (the first model load takes a minute or two). Later launches reuse the search server if it is already listening, so after updating `search_server.py` close its window and relaunch, or the old code keeps running.
+`run-web-knowledge-pipeline.bat` starts the web app, the Pinecone search server, and Docker when Docker is available. Chat stays disabled until the search window prints `Ready for chat` (the first model load takes a minute or two). Later launches reuse the search server if it is already listening, so after updating `wkp_search_server.py` (in the sibling `pinecone-management` repo) close its window and relaunch, or the old code keeps running.
 
 The **Index** menu lists every index in your Pinecone project. The **Namespaces** checklist lists that index's namespaces; tick several to search them together (up to 8). `peace-docs` (the document index built with Qwen3) and `multimodal-rag` load their own query model the first time you pick them; indexes with no local model, such as `gravity-claw`, are greyed out. Ticked namespaces with no vectors are unticked, and if none are left the one with the most data opens.
 
@@ -65,7 +65,7 @@ Scraped files stay on disk until you sync that folder. `scripts/ingest.mjs` only
 |------|------|
 | `src/` | Next.js UI and API routes |
 | `content/knowledge-base/` | Saved Markdown |
-| `pinecone-management/` | Chunk, embed, upload, and the chat search server |
+| `../pinecone-management/` (sibling repo) | Chunk, embed, upload, and the chat search server (`wkp_search_server.py`) |
 | `docker/` | SearXNG and Crawl4AI |
 | `plans/` | Design notes for search and scrape providers |
 

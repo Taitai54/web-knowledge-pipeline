@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "search-server": "../pinecone-management/.venv/bin/python3 ../pinecone-management/search_server.py",
+    "search-server": "../pinecone-management/.venv/bin/python3 ../pinecone-management/wkp_search_server.py",
     "pinecone-sync": "../pinecone-management/.venv/bin/python3 ../pinecone-management/pinecone_bulk.py"
   },
   "dependencies": {
