@@ -1,0 +1,61 @@
+{
+  "sites": {
+    "https://www.vogue.com": {
+      "origin": "https://www.vogue.com",
+      "title": "Vogue",
+      "feedUrl": "https://www.vogue.com/feed/rss",
+      "category": "general",
+      "checkedAt": "2026-09-25T16:49:18.100Z",
+      "included": true
+    },
+    "https://www.whowhatwear.com": {
+      "origin": "https://www.whowhatwear.com",
+      "title": "Latest from Who What Wear UK",
+      "feedUrl": "https://www.whowhatwear.com/uk/feeds.xml",
+      "category": "general",
+      "checkedAt": "2026-09-25T16:49:27.872Z"
+    },
+    "https://www.outsideonline.com": {
+      "origin": "https://www.outsideonline.com",
+      "title": "Outside Online",
+      "feedUrl": "https://www.outsideonline.com/feed?scope=anon",
+      "category": "general",
+      "checkedAt": "2026-09-25T16:49:37.192Z"
+    },
+    "https://prenuvo.com": {
+      "origin": "https://prenuvo.com",
+      "title": "prenuvo.com",
+      "feedUrl": null,
+      "category": "general",
+      "checkedAt": "2026-09-25T16:49:52.806Z"
+    },
+    "https://www.forbes.com": {
+      "origin": "https://www.forbes.com",
+      "title": "www.forbes.com",
+      "feedUrl": null,
+      "category": "general",
+      "checkedAt": "2026-09-25T16:50:21.978Z"
+    },
+    "https://www.globalwellnesssummit.com": {
+      "origin": "https://www.globalwellnesssummit.com",
+      "title": "Global Wellness Summit",
+      "feedUrl": "https://www.globalwellnesssummit.com/feed/",
+      "category": "general",
+      "checkedAt": "2026-09-25T16:50:29.681Z"
+    },
+    "https://theeverygirl.com": {
+      "origin": "https://theeverygirl.com",
+      "title": "theeverygirl.com",
+      "feedUrl": null,
+      "category": "general",
+      "checkedAt": "2026-09-25T16:50:34.423Z"
+    },
+    "https://hartfordhealthcare.org": {
+      "origin": "https://hartfordhealthcare.org",
+      "title": "hartfordhealthcare.org",
+      "feedUrl": null,
+      "category": "general",
+      "checkedAt": "2026-09-25T16:50:42.800Z"
+    }
+  }
+}

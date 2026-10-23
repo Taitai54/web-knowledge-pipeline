@@ -5,10 +5,12 @@ import { SearchBox } from "@/components/SearchBox";
 import { ResultCard } from "@/components/ResultCard";
 import { FolderPickerModal } from "@/components/FolderPickerModal";
 import { PasteUrlsPanel } from "@/components/PasteUrlsPanel";
+import { DiscoverPanel } from "@/components/DiscoverPanel";
 import { ProviderStatusBar, type ProviderStatus } from "@/components/ProviderStatusBar";
 import { PipelineGuide, type PipelineStep } from "@/components/PipelineGuide";
 import { ScrapeToolbar } from "@/components/ScrapeToolbar";
 import { RagPlayground } from "@/components/RagPlayground";
+import { SourceFeedsPanel } from "@/components/SourceFeedsPanel";
 import { Globe, MessageSquare } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import clsx from "clsx";
@@ -105,11 +107,38 @@ export default function Home() {
     [scrapeStatus],
   );
 
+  const synced = useMemo(
+    () => syncLogs.some((line) => line.includes("exit code 0")),
+    [syncLogs],
+  );
+
   const activeStep: PipelineStep = useMemo(() => {
+    if (synced) return 5;
+    if (scrapedCount > 0) return 4;
     if (results.length === 0) return 1;
     if (selectedUrls.size === 0) return 2;
     return 3;
-  }, [results.length, selectedUrls.size]);
+  }, [results.length, selectedUrls.size, scrapedCount, synced]);
+
+  const addDiscovered = useCallback(
+    (items: { url: string; title: string; content: string; date?: string }[]) => {
+      setResults((prev) => {
+        const existing = new Set(prev.map((item) => item.url));
+        const added = items
+          .filter((item) => !existing.has(item.url))
+          .map((item) => ({
+            title: item.title,
+            url: item.url,
+            content: item.content,
+            score: 0,
+            date: item.date,
+          }));
+        return [...prev, ...added];
+      });
+      toast.success(`Added ${items.length} URL(s) — now select them in step 2`);
+    },
+    [],
+  );
 
   const handleSearch = async (q: string, searchProvider: string, timeRange: string) => {
     setIsSearching(true);
@@ -184,7 +213,12 @@ export default function Home() {
           });
           const data = await res.json();
 
-          if (res.ok && data.success) {
+          if (res.ok && data.success && data.duplicate) {
+            setScrapeStatus((prev) => ({ ...prev, [url]: "scraped" }));
+            setScrapeEngineByUrl((prev) => ({ ...prev, [url]: engine }));
+            ok += 1;
+            toast(`Already in the knowledge base: ${title}`);
+          } else if (res.ok && data.success) {
             setScrapeStatus((prev) => ({ ...prev, [url]: "scraped" }));
             setScrapeEngineByUrl((prev) => ({ ...prev, [url]: engine }));
             ok += 1;
@@ -375,6 +409,8 @@ export default function Home() {
               hasResults={results.length > 0}
               selectedCount={selectedUrls.size}
               failedCount={failedCount}
+              scrapedCount={scrapedCount}
+              synced={synced}
             />
 
             <div className="space-y-4">
@@ -403,24 +439,9 @@ export default function Home() {
                 searchProviders={searchProviders}
               />
 
-              <div className="flex justify-center">
-                <PasteUrlsPanel
-                  onAdd={(items) => {
-                    setResults((prev) => {
-                      const existing = new Set(prev.map((r) => r.url));
-                      const added = items
-                        .filter((i) => !existing.has(i.url))
-                        .map((i) => ({
-                          title: i.title,
-                          url: i.url,
-                          content: i.content,
-                          score: 0,
-                        }));
-                      return [...prev, ...added];
-                    });
-                    toast.success(`Added ${items.length} URL(s) — now select them in step 2`);
-                  }}
-                />
+              <div className="flex flex-wrap justify-center items-start gap-3">
+                <PasteUrlsPanel onAdd={addDiscovered} />
+                <DiscoverPanel onAdd={addDiscovered} />
               </div>
             </div>
 
@@ -483,6 +504,8 @@ export default function Home() {
                 </div>
               </>
             )}
+
+            <SourceFeedsPanel />
           </>
         ) : (
           <RagPlayground defaultNamespace={category} />

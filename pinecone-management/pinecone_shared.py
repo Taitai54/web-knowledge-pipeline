@@ -21,6 +21,15 @@ import os
 import random
 import time
 
+try:
+    # Antivirus HTTPS scanning (e.g. Norton Web Shield) re-signs traffic with a root
+    # that only the OS store trusts; certifi alone then fails every Pinecone call.
+    import truststore
+
+    truststore.inject_into_ssl()
+except ImportError:
+    pass
+
 import requests
 
 # ── Chunking ──────────────────────────────────────────────────────────────────

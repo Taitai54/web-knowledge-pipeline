@@ -27,8 +27,8 @@ pip install sentence-transformers
 # Local topic-modeling / insights (pinecone_insights.py, --summarize-namespace)
 pip install scikit-learn
 
-# search_server.py (standalone Flask query API for a separate app — not needed
-# for the CLI/GUI/MCP server above)
+# search_server.py — HTTP retrieval for the Next.js RAG chat (port 8765).
+# Not used by the CLI, GUI, or MCP server. See ../ARCHITECTURE.md.
 pip install -r requirements.txt -r requirements-search.txt
 ```
 
@@ -156,6 +156,19 @@ Search the books namespace, filter by collection = "100M-Offers", find ideas abo
 Override with `--doc-type {book,kb,notes,markdown}` or `--doc-type-from-folder`.
 
 ---
+
+## Search server — RAG chat retrieval
+
+The web app's RAG Chat Playground calls this process. It is not started by `npm run dev`.
+
+```bash
+# from the repo root, with PINECONE_API_KEY set
+npm run search-server
+```
+
+It listens on http://localhost:8765, embeds the query locally (`query:` prefix), and returns Pinecone matches. Claude's `pinecone_mcp.py` search is a separate path and adds reranking; the chat UI does not use it.
+
+The full pipeline (scrape → sync → chat) is documented in `../ARCHITECTURE.md`.
 
 ## Tests
 

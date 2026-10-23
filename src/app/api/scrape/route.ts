@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import { resolveSavePath } from "@/lib/kb/paths";
+import { cleanScrapedMarkdown, findExistingSource } from "@/lib/kb/markdown";
 import { defaultScrapeProvider, runScrape } from "@/lib/providers/scrape";
+import { recordSiteFeed } from "@/lib/discover/sources";
+
+function checkSiteFeed(url: string, category: string) {
+  void recordSiteFeed(url, category).catch((error) => console.error("Site feed check failed:", error));
+}
 
 export async function POST(request: Request) {
   try {
@@ -13,12 +19,29 @@ export async function POST(request: Request) {
     }
 
     const scrapeEngine = engine || defaultScrapeProvider();
-    const { markdown: markdownContent } = await runScrape(scrapeEngine, url);
-
     const { saveDir, frontmatterCategory, safeTitle } = resolveSavePath(
       category,
       title || "untitled",
     );
+
+    const kbRoot = path.join(process.cwd(), "content", "knowledge-base");
+    const filePath = path.join(saveDir, `${safeTitle}.md`);
+    if (!returnContentOnly) {
+      const existing = await findExistingSource([saveDir, kbRoot], url, filePath);
+      if (existing) {
+        checkSiteFeed(url, frontmatterCategory);
+        return NextResponse.json({
+          success: true,
+          duplicate: true,
+          path: existing,
+          engine: scrapeEngine,
+        });
+      }
+    }
+
+    const { markdown: rawMarkdown } = await runScrape(scrapeEngine, url);
+    const cleaned = cleanScrapedMarkdown(rawMarkdown);
+    const markdownContent = cleaned.trim() ? cleaned : rawMarkdown;
 
     const frontmatter = `---
 title: "${String(title || "untitled").replace(/"/g, '\\"')}"
@@ -37,9 +60,8 @@ scrape_engine: "${scrapeEngine}"
     }
 
     await fs.mkdir(saveDir, { recursive: true });
-
-    const filePath = path.join(saveDir, `${safeTitle}.md`);
     await fs.writeFile(filePath, fullContent, "utf-8");
+    checkSiteFeed(url, frontmatterCategory);
 
     return NextResponse.json({ success: true, path: filePath, engine: scrapeEngine });
   } catch (error) {

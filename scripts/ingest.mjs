@@ -1,3 +1,5 @@
+// Local chunk preview only. This script does not embed or upload.
+// Sync a folder from the app, or run pinecone-management/pinecone_bulk.py.
 
 import fs from 'fs/promises';
 import path from 'path';
@@ -50,8 +52,7 @@ async function runIngestion() {
             
             console.log(`   > Extracted metadata...`);
             console.log(`   > Split into ${chunks.length} chunks.`);
-            console.log(`   > 📡 (Mock) Embedding chunks with OpenAI/Cohere...`);
-            console.log(`   > 💾 (Mock) Upserting to Pinecone/Weaviate...`);
+            console.log(`   > Preview only. Nothing is embedded or uploaded.`);
             
             // Simulating latency
             await new Promise(r => setTimeout(r, 100)); 
@@ -59,7 +60,7 @@ async function runIngestion() {
             console.log(`   ✅ Done.`);
         }
 
-        console.log("\n✨ Ingestion Complete. All knowledge is now RAG-ready.");
+        console.log("\nPreview complete. Upload with Sync to Pinecone in the app, or pinecone_bulk.py.");
 
     } catch (error) {
         if (error.code === 'ENOENT') {

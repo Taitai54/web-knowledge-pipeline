@@ -1,37 +1,80 @@
 import { NextResponse } from "next/server";
+import { generateAnswer } from "@/lib/rag/llm";
+import { SEARCH_SERVER_URL } from "@/lib/rag/searchServer";
+
+function priorTurns(history: unknown): string {
+  if (!Array.isArray(history)) return "";
+  const lines = history
+    .filter(
+      (turn) =>
+        turn &&
+        (turn.role === "user" || turn.role === "assistant") &&
+        typeof turn.content === "string" &&
+        turn.content.trim(),
+    )
+    .slice(-8)
+    .map(
+      (turn) =>
+        `${turn.role === "user" ? "User" : "Assistant"}: ${String(turn.content).slice(0, 4000)}`,
+    );
+  if (lines.length === 0) return "";
+  return `Conversation so far:\n${lines.join("\n\n")}\n\n`;
+}
+
+function retrievalQuery(query: string, history: unknown): string {
+  if (!Array.isArray(history)) return query;
+  const words = query.trim().split(/\s+/).filter(Boolean);
+  if (words.length > 8) return query;
+  const priorUser = [...history]
+    .reverse()
+    .find((turn) => turn && turn.role === "user" && typeof turn.content === "string" && turn.content.trim());
+  if (!priorUser) return query;
+  return `${String(priorUser.content).slice(0, 500)}\n${query}`;
+}
 
 export async function POST(request: Request) {
   try {
-    const { query, namespace } = await request.json();
+    const { query, index, namespace, namespaces, history, provider, model } = await request.json();
+    const searchNamespaces: string[] = (Array.isArray(namespaces) ? namespaces : [namespace])
+      .filter((name: unknown): name is string => typeof name === "string" && name.trim() !== "");
 
     if (!query) {
       return NextResponse.json({ success: false, error: "Query is required" }, { status: 400 });
     }
-    if (!namespace) {
+    if (searchNamespaces.length === 0) {
       return NextResponse.json({ success: false, error: "Namespace is required" }, { status: 400 });
     }
 
-    // 1. Query the Flask search server
+    // 1. Query the local search server (chosen Pinecone index and namespace).
     let chunks: any[] = [];
     let searchError = "";
+    let reranked = false;
+    let hybrid = false;
+    let searchWarnings: string[] = [];
+    const searchQuery = retrievalQuery(query, history);
     try {
-      const searchRes = await fetch("http://localhost:8765/search", {
+      const searchRes = await fetch(`${SEARCH_SERVER_URL}/search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, namespace, topK: 5 }),
-        signal: AbortSignal.timeout(10000), // 10 second timeout
+        body: JSON.stringify({ query: searchQuery, index, namespaces: searchNamespaces, topK: 5, rerank: true }),
+        signal: AbortSignal.timeout(90000),
       });
 
       if (searchRes.ok) {
         const searchData = await searchRes.json();
         chunks = searchData.chunks || [];
+        reranked = Boolean(searchData.reranked);
+        hybrid = Boolean(searchData.hybrid);
+        searchWarnings = (Array.isArray(searchData.errors) ? searchData.errors : []).map(
+          (item: { namespace?: string; method?: string }) => `${item.namespace} (${item.method} search failed)`,
+        );
       } else {
         const errorText = await searchRes.text();
         searchError = `Search server returned HTTP ${searchRes.status}: ${errorText.slice(0, 100)}`;
       }
     } catch (e: any) {
       console.error("Failed to query Flask search server:", e);
-      searchError = "Search server is not running on port 8765. Please run 'npm run search-server' first.";
+      searchError = "Search server is not running on port 8765. Start run-web-knowledge-pipeline.bat and wait until it says Ready for chat.";
     }
 
     if (searchError) {
@@ -45,14 +88,11 @@ export async function POST(request: Request) {
     if (chunks.length === 0) {
       return NextResponse.json({
         success: true,
-        answer: "No relevant content found in the selected namespace. Make sure you have synced files to it.",
-        chunks: []
+        answer: "No relevant content found in the selected namespaces. Make sure you have synced files to them.",
+        chunks: [],
+        warnings: searchWarnings,
       });
     }
-
-    // 2. Check for LLM keys
-    const geminiKey = process.env.GEMINI_API_KEY;
-    const openaiKey = process.env.OPENAI_API_KEY;
 
     // Compile context
     const contextText = chunks
@@ -61,81 +101,26 @@ export async function POST(request: Request) {
 
     const systemPrompt = `You are a helpful knowledge assistant. Answer the user's question using ONLY the provided text snippets from the knowledge base. 
 If the context does not contain the answer, say "I cannot find the answer in the retrieved documents."
+Use the conversation only to understand follow-up questions. The retrieved snippets are the only source for facts.
 Format your response using Markdown. Proactively cite the text snippets by suffixing your statements with their corresponding citation numbers, e.g., "The project uses Next.js [1] and sentence-transformers [2]."
 
 Retrieved Context Snippets:
 ${contextText}`;
 
-    const userPrompt = `Question: ${query}`;
+    const userPrompt = `${priorTurns(history)}Question: ${query}`;
 
     let answer = "";
     let providerUsed = "";
+    let modelUsed = "";
 
-    if (geminiKey) {
-      providerUsed = "Gemini";
-      try {
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [
-                {
-                  parts: [
-                    {
-                      text: `${systemPrompt}\n\n${userPrompt}`
-                    }
-                  ]
-                }
-              ]
-            })
-          }
-        );
-
-        if (res.ok) {
-          const data = await res.json();
-          answer = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.";
-        } else {
-          const errText = await res.text();
-          throw new Error(`Gemini API error: ${errText}`);
-        }
-      } catch (err: any) {
-        console.error("Gemini call failed:", err);
-        answer = `Failed to generate answer using Gemini: ${err.message}`;
-      }
-    } else if (openaiKey) {
-      providerUsed = "OpenAI";
-      try {
-        const res = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${openaiKey}`
-          },
-          body: JSON.stringify({
-            model: "gpt-4o-mini",
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userPrompt }
-            ],
-            temperature: 0.2
-          })
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          answer = data.choices?.[0]?.message?.content || "No response generated.";
-        } else {
-          const errText = await res.text();
-          throw new Error(`OpenAI API error: ${errText}`);
-        }
-      } catch (err: any) {
-        console.error("OpenAI call failed:", err);
-        answer = `Failed to generate answer using OpenAI: ${err.message}`;
-      }
-    } else {
-      answer = `Chunks retrieved successfully, but no LLM keys (GEMINI_API_KEY or OPENAI_API_KEY) found in your .env.local file. To enable full conversational answers, please add a key and restart the Next.js server.`;
+    try {
+      const generated = await generateAnswer(systemPrompt, userPrompt, { provider, model });
+      answer = generated.text;
+      providerUsed = generated.label;
+      modelUsed = generated.model;
+    } catch (err) {
+      console.error("LLM call failed:", err);
+      answer = err instanceof Error ? err.message : "The model request failed.";
       providerUsed = "None";
     }
 
@@ -143,7 +128,11 @@ ${contextText}`;
       success: true,
       answer,
       chunks,
-      provider: providerUsed
+      provider: providerUsed,
+      model: modelUsed,
+      reranked,
+      hybrid,
+      warnings: searchWarnings,
     });
 
   } catch (error: any) {

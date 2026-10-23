@@ -1,75 +1,73 @@
-# Web-to-Markdown RAG Knowledge Ingestion Pipeline
+# Web Knowledge Pipeline
 
-This project is a modern "Web-to-LLM" pipeline tool. It allows you to search the live web, select high-quality results, scrape them into clean Markdown using Firecrawl, and organize them for a RAG knowledge base.
+Search the web, save pages as Markdown, upload them to Pinecone, and ask questions against that namespace.
 
-## Features
+The running shape of the system is in [ARCHITECTURE.md](ARCHITECTURE.md). Provider setup for local Docker is in [docker/README.md](docker/README.md). The uploader, MCP server, and embedding rules are in [pinecone-management/README.md](pinecone-management/README.md).
 
-- **Search**: Interactive search UI powered by Tavily API.
-- **Selection**: Review and select multiple URLs to scrape.
-- **Extraction**: Automatic conversion of web pages to clean Markdown via Firecrawl.
-- **Organization**: Save scrapes into categorized folders with YAML frontmatter.
-- **RAG Ingestion**: A script to simulate the ingestion and chunking process for Vector DBs.
+## What you can do
 
-## Prerequisites
-
-- Node.js 18+
-- API Keys for:
-  - [Tavily AI](https://tavily.com/) (for search)
-  - [Firecrawl](https://firecrawl.dev/) (for scraping)
+- Search with SearXNG (local), Brave, Exa, Tavily, or Firecrawl.
+- Paste URLs, or import a sitemap or an RSS, Atom, or OPML feed.
+- Scrape to Markdown with Crawl4AI (local), Firecrawl, or Jina Reader, into `content/knowledge-base/{category}/`.
+- Follow the sites you scrape. After each save the app looks for that site's own RSS or Atom feed. **Sites to follow** lists them, ticked. **Check saved pages** adds sites from older saved pages, unticked. **Download OPML** exports only the ticked feeds, one folder per category, for your RSS reader. The list lives in `content/feed-sources.json`.
+- Sync a category folder into the Pinecone index `peace`. The category name is the namespace.
+- Ask questions in **RAG Chat Playground**. Retrieval is local. The answer comes from Ollama, LM Studio, Gemini, or OpenAI, cited from the retrieved chunks.
 
 ## Setup
 
-1. **Clone the repository** (if not already local).
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
-3. **Configure Environment Variables**:
-   Create a `.env.local` file in the root directory:
-
-   ```env
-   # API Keys
-   TAVILY_API_KEY=tvly-xxxxxxxxxxxx
-   FIRECRAWL_API_KEY=fc-xxxxxxxxxxxx
-
-   # Firebase (Optional, for history/auth)
-   NEXT_PUBLIC_FIREBASE_API_KEY=...
-   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
-   NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
-   ```
-
-## Usage
-
-### 1. Run the Web Interface
-
-Start the Next.js development server:
+Node.js 18+.
 
 ```bash
-npm run dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to search and scrape.
+Copy `env.example` to `.env.local`. For free search and scrape, start Docker first:
 
-### 2. View Scraped Content
+```bat
+scripts\start-docker-services.bat
+```
 
-Scraped Markdown files are saved in:
-`root/content/knowledge-base/{category}/{title}.md`
-
-### 3. Run RAG Ingestion Pipeline
-
-To process the knowledge base for RAG (simulated):
+Python side (upload + chat retrieval):
 
 ```bash
-node scripts/ingest.mjs
+pip install requests pypdf pyyaml
+pip install -r pinecone-management/requirements.txt -r pinecone-management/requirements-search.txt
+pip install sentence-transformers
 ```
 
-## Tech Stack
+`PINECONE_API_KEY` must be set for sync and for the search server. `OPENAI_API_KEY` or `GEMINI_API_KEY` must be visible to Next.js for generated answers. User environment variables count; `.env.local` is the reliable place to put them.
 
-- **Framework**: Next.js 14 (App Router)
-- **Styling**: Vanilla CSS Modules (Premium Dark Mode)
-- **Search**: Tavily API
-- **Scraper**: Firecrawl SDK
-- **Database**: Firebase (Configured but optional for MVP)
+## Run
+
+```bat
+run-web-knowledge-pipeline.bat
+```
+
+Or `npm run dev`. The app is at [http://localhost:3010](http://localhost:3010).
+
+### RAG chat
+
+`run-web-knowledge-pipeline.bat` starts the web app, the Pinecone search server, and Docker when Docker is available. Chat stays disabled until the search window prints `Ready for chat` (the first model load takes a minute or two). Later launches reuse the search server if it is already listening, so after updating `search_server.py` close its window and relaunch, or the old code keeps running.
+
+The **Index** menu lists every index in your Pinecone project. The **Namespaces** checklist lists that index's namespaces; tick several to search them together (up to 8). `peace-docs` (the document index built with Qwen3) and `multimodal-rag` load their own query model the first time you pick them; indexes with no local model, such as `gravity-claw`, are greyed out. Ticked namespaces with no vectors are unticked, and if none are left the one with the most data opens.
+
+On `peace-docs`, each search also runs keyword (BM25) search, so exact names and terms are found even when the wording differs. Answers found this way show a **keyword + meaning** badge. `peace` and `multimodal-rag` use meaning search only.
+
+The download button beside **Namespaces** saves the whole chat as one Markdown file: each question, its answer, and the numbered sources with their passages.
+
+The **Model** row chooses Ollama, LM Studio, OpenAI, or Gemini. Local servers are detected on `http://127.0.0.1:11434` and `http://127.0.0.1:1234`. Ollama keeps the chat model loaded for 30 minutes after each answer, so only the first question after a break waits for the model to load. Search itself takes 1–3 seconds; most of the wait is the model writing. **Keys and servers** saves an OpenAI or Gemini key in this app (`.llm-settings.json`, not committed) and can point the local URLs somewhere else.
+
+Scraped files stay on disk until you sync that folder. `scripts/ingest.mjs` only previews chunks. It does not upload.
+
+## Layout
+
+| Path | Role |
+|------|------|
+| `src/` | Next.js UI and API routes |
+| `content/knowledge-base/` | Saved Markdown |
+| `pinecone-management/` | Chunk, embed, upload, and the chat search server |
+| `docker/` | SearXNG and Crawl4AI |
+| `plans/` | Design notes for search and scrape providers |
 
 ## License
 

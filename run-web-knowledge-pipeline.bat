@@ -73,11 +73,33 @@ if not exist ".env.local" (
     )
 )
 
+call :EnsureDocker
+call :EnsureSearchServer
+call :ResolveDevPort
+
+if "%DEVPORT%"=="READY" (
+    echo The app is already running at http://localhost:%PIPELINE_PORT%
+    start "" http://localhost:%PIPELINE_PORT%/
+    echo.
+    pause
+    exit /b 0
+)
+
+if "%DEVPORT%"=="STUCK" (
+    echo Port %PIPELINE_PORT% is held by a Node process that is not responding.
+    echo Stopping that process and starting fresh...
+    echo.
+    powershell -NoProfile -File "%~dp0scripts\dev-port.ps1" -StopStuck
+)
+
 echo Starting dev server... browser opens when ready.
-echo Press Ctrl+C to stop.
+echo Press Ctrl+C to stop the web app. The search server stays open in its own window.
 echo.
 
 start "" /MIN cmd /c "timeout /t 8 /nobreak >nul && start http://localhost:%PIPELINE_PORT%/"
+
+REM Trust the Windows certificate store so antivirus HTTPS scanning does not break web fetches.
+node --use-system-ca -e "" >nul 2>&1 && set "NODE_OPTIONS=--use-system-ca %NODE_OPTIONS%"
 
 call npm run dev
 
@@ -89,6 +111,55 @@ if errorlevel 1 (
 )
 
 endlocal
+exit /b 0
+
+:ResolveDevPort
+set "DEVPORT=FREE"
+for /f "usebackq delims=" %%A in (`powershell -NoProfile -File "%~dp0scripts\dev-port.ps1" -Port %PIPELINE_PORT%`) do set "DEVPORT=%%A"
+exit /b 0
+
+:EnsureDocker
+where docker >nul 2>&1
+if errorlevel 1 (
+    echo [NOTE] Docker was not found. Local SearXNG and Crawl4AI stay offline.
+    echo.
+    exit /b 0
+)
+docker info >nul 2>&1
+if errorlevel 1 (
+    echo [NOTE] Docker Desktop is not running. SearXNG and Crawl4AI stay offline.
+    echo.
+    exit /b 0
+)
+echo Starting SearXNG and Crawl4AI...
+docker compose -f docker\docker-compose.yml up -d
+if errorlevel 1 (
+    echo [NOTE] Docker did not start. Open Docker Desktop, then run this script again.
+    echo.
+)
+exit /b 0
+
+:EnsureSearchServer
+where python >nul 2>&1
+if errorlevel 1 (
+    echo [NOTE] Python was not found. RAG chat stays offline.
+    echo.
+    exit /b 0
+)
+if not defined PINECONE_API_KEY (
+    echo [NOTE] PINECONE_API_KEY is not set. RAG chat stays offline.
+    echo.
+    exit /b 0
+)
+powershell -NoProfile -Command "exit ([int](-not [bool](Get-NetTCPConnection -LocalPort 8765 -State Listen -ErrorAction SilentlyContinue)))"
+if not errorlevel 1 (
+    echo RAG search server is already listening on http://localhost:8765
+    echo.
+    exit /b 0
+)
+echo Starting RAG search server. Chat stays disabled until the model finishes loading.
+start "WKP Search Server" /D "%~dp0." cmd /k "set PYTHONUNBUFFERED=1&& python pinecone-management\search_server.py"
+echo.
 exit /b 0
 
 :LoadEnvFile
